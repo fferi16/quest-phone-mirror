@@ -10,6 +10,8 @@
     <string name="status_paused">A képernyőrögzítés leállt (képernyőzár vagy rendszer). Indítsd újra a megosztást.</string>
     <string name="btn_restart">Megosztás újraindítása</string>
     <string name="notif_text_paused">A rögzítés leállt – koppints az újraindításhoz</string>
+    <string name="mute_label">Telefon némítása, amíg a Quest csatlakozva van</string>
+    <string name="audio_hint">A hang a Questen szól. A hangátvitelhez a mikrofon-engedély kell (a rendszer így nevezi a lejátszott hang elkapását), mikrofont nem használ.</string>
     <string name="ip_label">Telefon IP-címe: %1$s</string>
     <string name="ip_none">nincs wifi kapcsolat</string>
     <string name="video_label">Videó: %1$s</string>

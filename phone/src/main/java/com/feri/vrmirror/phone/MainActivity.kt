@@ -52,8 +52,26 @@ class MainActivity : AppCompatActivity() {
     private val notificationLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) {
             // Akár megadta, akár nem, a megosztás mehet (értesítés nélkül is fut).
+            requestAudioThenProjection()
+        }
+
+    private val audioLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+            // Hang nélkül is mehet a megosztás.
             requestProjection()
         }
+
+    private lateinit var muteCheckBox: android.widget.CheckBox
+
+    private fun requestAudioThenProjection() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            audioLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        } else {
+            requestProjection()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -75,6 +93,12 @@ class MainActivity : AppCompatActivity() {
         }
         accessibilityButton.setOnClickListener {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
+
+        muteCheckBox = findViewById(R.id.muteCheckBox)
+        muteCheckBox.isChecked = MirrorService.isMuteEnabled(this)
+        muteCheckBox.setOnCheckedChangeListener { _, checked ->
+            MirrorService.setMuteEnabled(this, checked)
         }
     }
 
@@ -102,7 +126,7 @@ class MainActivity : AppCompatActivity() {
         ) {
             notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else {
-            requestProjection()
+            requestAudioThenProjection()
         }
     }
 

@@ -38,6 +38,21 @@
             android:layout_marginTop="24dp"
             android:text="@string/btn_start" />
 
+        <CheckBox
+            android:id="@+id/muteCheckBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:checked="true"
+            android:text="@string/mute_label" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="@string/audio_hint"
+            android:textSize="12sp" />
+
         <TextView
             android:id="@+id/accessibilityText"
             android:layout_width="match_parent"

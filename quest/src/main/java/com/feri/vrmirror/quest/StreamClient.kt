@@ -25,6 +25,8 @@ class StreamClient(private val host: String, private val listener: Listener) {
         fun onFrame(data: ByteArray, offset: Int, length: Int, keyframe: Boolean, ptsUs: Long)
         /** A telefon állapota: Protocol.STATUS_FLAG_* bitek. */
         fun onStatus(flags: Int)
+        fun onAudioConfig(sampleRate: Int, channels: Int)
+        fun onAudio(data: ByteArray)
     }
 
     companion object {
@@ -63,6 +65,11 @@ class StreamClient(private val host: String, private val listener: Listener) {
                         }
                         Protocol.MSG_CODEC_CONFIG -> listener.onCodecConfig(msg.payload)
                         Protocol.MSG_STATUS -> listener.onStatus(ByteBuffer.wrap(msg.payload).int)
+                        Protocol.MSG_AUDIO_CONFIG -> {
+                            val bb = ByteBuffer.wrap(msg.payload)
+                            listener.onAudioConfig(bb.int, bb.int)
+                        }
+                        Protocol.MSG_AUDIO -> listener.onAudio(msg.payload)
                         Protocol.MSG_VIDEO_FRAME -> {
                             val bb = ByteBuffer.wrap(msg.payload)
                             val flags = bb.int

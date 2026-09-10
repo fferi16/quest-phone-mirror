@@ -53,6 +53,12 @@ class NetServer(private val listener: Listener) {
     @Volatile private var codecConfig: ByteArray? = null
     @Volatile private var statusFlags = 0
 
+    @Volatile private var audioSampleRate = 0
+    @Volatile private var audioChannels = 0
+    private val queuedAudio = AtomicInteger(0)
+    /** Ennyi hangcsomag (20 ms) várakozhat; felette eldobjuk, hogy ne nőjön a késés. */
+    private val maxQueuedAudio = 15
+
     val isClientConnected: Boolean get() = writer != null
 
     fun start() {
@@ -138,6 +144,38 @@ class NetServer(private val listener: Listener) {
             w.write(Protocol.MSG_VIDEO_CONFIG, videoConfigPayload(videoWidth, videoHeight))
         }
         codecConfig?.let { w.write(Protocol.MSG_CODEC_CONFIG, it) }
+        if (audioSampleRate > 0) {
+            w.write(Protocol.MSG_AUDIO_CONFIG, audioConfigPayload(audioSampleRate, audioChannels))
+        }
+    }
+
+    private fun audioConfigPayload(rate: Int, ch: Int): ByteArray =
+        ByteBuffer.allocate(8).putInt(rate).putInt(ch).array()
+
+    fun setAudioConfig(sampleRate: Int, channels: Int) {
+        audioSampleRate = sampleRate
+        audioChannels = channels
+        send { it.write(Protocol.MSG_AUDIO_CONFIG, audioConfigPayload(sampleRate, channels)) }
+    }
+
+    fun clearAudio() {
+        audioSampleRate = 0
+        audioChannels = 0
+    }
+
+    fun sendAudio(data: ByteArray, length: Int) {
+        synchronized(lock) {
+            val w = writer ?: return
+            if (queuedAudio.get() >= maxQueuedAudio) return
+            queuedAudio.incrementAndGet()
+            submit(w) {
+                try {
+                    it.write(Protocol.MSG_AUDIO, data, 0, length)
+                } finally {
+                    queuedAudio.decrementAndGet()
+                }
+            }
+        }
     }
 
     private fun videoConfigPayload(w: Int, h: Int): ByteArray =

@@ -104,74 +104,85 @@ class TouchInjectorService : AccessibilityService() {
     }
 
     // ---- Görgetés (hüvelykujj-kar / egérgörgő) ----
+    //
+    // A görgetést egy "virtuális ujj" folyamatos húzásaként játsszuk le, ugyanazzal a
+    // mechanizmussal, mint a kézi húzást: lenyomás -> mozgás-szakaszok -> felengedés,
+    // ha ~150 ms-ig nem jön újabb görgetés. Ha az ujj a képernyő széléhez ér,
+    // felemeljük és a kiindulópontból folytatjuk.
 
-    private var scrollBusy = false
-    private var scrollPendingDx = 0f
-    private var scrollPendingDy = 0f
-    private var scrollX = 0f
-    private var scrollY = 0f
+    private var scrollActive = false
+    private var scrollPos = PointF()
+    private var scrollOrigin = PointF()
+    private val scrollEnd = Runnable { endScroll() }
 
-    private fun handleScroll(nx: Float, ny: Float, dx: Float, dy: Float) {
-        // Húzás közben nem görgetünk külön.
-        if (stroke != null) return
-        val p = screenPoint(nx, ny)
-        scrollX = p.x
-        scrollY = p.y
-        scrollPendingDx += dx
-        scrollPendingDy += dy
-        if (!scrollBusy) dispatchScroll()
-    }
-
-    private fun dispatchScroll() {
-        val dx = scrollPendingDx
-        val dy = scrollPendingDy
-        scrollPendingDx = 0f
-        scrollPendingDy = 0f
-        if (dx == 0f && dy == 0f) return
-
+    private fun screenSize(): PointF {
         val metrics = DisplayMetrics()
         getSystemService(DisplayManager::class.java)?.getDisplay(Display.DEFAULT_DISPLAY)
             ?.let { @Suppress("DEPRECATION") it.getRealMetrics(metrics) }
-        val w = metrics.widthPixels.toFloat().coerceAtLeast(1f)
-        val h = metrics.heightPixels.toFloat().coerceAtLeast(1f)
-        val step = h * 0.15f
+        return PointF(
+            metrics.widthPixels.toFloat().coerceAtLeast(2f),
+            metrics.heightPixels.toFloat().coerceAtLeast(2f)
+        )
+    }
 
+    private fun handleScroll(nx: Float, ny: Float, dx: Float, dy: Float) {
+        // Kézi húzás közben nem görgetünk külön.
+        if (!scrollActive && stroke != null) return
+        val size = screenSize()
+        // Egy görgő-"fok" ennyi képpont (a képernyő magasságának 4%-a).
+        val step = size.y * 0.04f
         // Görgő felfelé (dy > 0) = a tartalom lefelé mozog = az ujj lefelé húz.
         // Görgő jobbra (dx > 0) = a tartalom jobbra gördül = az ujj balra húz.
-        val startX = scrollX.coerceIn(1f, w - 2f)
-        val startY = scrollY.coerceIn(1f, h - 2f)
-        val endX = (startX - dx * step).coerceIn(1f, w - 2f)
-        val endY = (startY + dy * step).coerceIn(1f, h - 2f)
-        if (endX == startX && endY == startY) return
+        val moveX = -dx * step
+        val moveY = dy * step
 
-        val path = Path().apply {
-            moveTo(startX, startY)
-            lineTo(endX, endY)
+        if (!scrollActive) {
+            val p = screenPoint(nx, ny)
+            // A kiindulópont a képernyő közepe táján legyen, hogy legyen hely mindkét irányba.
+            scrollOrigin = PointF(
+                p.x.coerceIn(size.x * 0.15f, size.x * 0.85f),
+                p.y.coerceIn(size.y * 0.3f, size.y * 0.7f)
+            )
+            scrollPos = PointF(scrollOrigin.x, scrollOrigin.y)
+            scrollActive = true
+            handleTouchPx(Protocol.TOUCH_DOWN, scrollPos)
         }
-        val gesture = GestureDescription.Builder()
-            .addStroke(GestureDescription.StrokeDescription(path, 0, 160))
-            .build()
-        scrollBusy = true
-        Log.d(TAG, "Görgetés: ($startX,$startY) -> ($endX,$endY)")
-        val ok = dispatchGesture(gesture, object : GestureResultCallback() {
-            override fun onCompleted(gestureDescription: GestureDescription?) {
-                scrollBusy = false
-                dispatchScroll()
-            }
 
-            override fun onCancelled(gestureDescription: GestureDescription?) {
-                scrollBusy = false
-                scrollPendingDx = 0f
-                scrollPendingDy = 0f
-            }
-        }, handler)
-        if (!ok) scrollBusy = false
+        var nextX = scrollPos.x + moveX
+        var nextY = scrollPos.y + moveY
+        val margin = size.y * 0.05f
+        if (nextY < margin || nextY > size.y - margin || nextX < margin || nextX > size.x - margin) {
+            // Elértük a szélét: felemeljük az ujjat, és a kiindulópontból folytatjuk.
+            handleTouchPx(Protocol.TOUCH_UP, scrollPos)
+            scrollPos = PointF(scrollOrigin.x, scrollOrigin.y)
+            handleTouchPx(Protocol.TOUCH_DOWN, scrollPos)
+            nextX = (scrollPos.x + moveX).coerceIn(margin, size.x - margin)
+            nextY = (scrollPos.y + moveY).coerceIn(margin, size.y - margin)
+        }
+        scrollPos = PointF(nextX, nextY)
+        handleTouchPx(Protocol.TOUCH_MOVE, scrollPos)
+
+        handler.removeCallbacks(scrollEnd)
+        handler.postDelayed(scrollEnd, 150)
+    }
+
+    private fun endScroll() {
+        if (!scrollActive) return
+        scrollActive = false
+        handleTouchPx(Protocol.TOUCH_UP, scrollPos)
     }
 
     // ---- Érintés / húzás ----
 
     private fun handleTouch(action: Int, nx: Float, ny: Float) {
-        val p = screenPoint(nx, ny)
+        if (scrollActive && action == Protocol.TOUCH_DOWN) {
+            handler.removeCallbacks(scrollEnd)
+            scrollActive = false
+        }
+        handleTouchPx(action, screenPoint(nx, ny))
+    }
+
+    private fun handleTouchPx(action: Int, p: PointF) {
         if (action != Protocol.TOUCH_MOVE) {
             Log.d(TAG, "Érintés: action=$action (${p.x},${p.y}) busy=$busy stroke=${stroke != null}")
         }

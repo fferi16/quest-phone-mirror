@@ -31,6 +31,12 @@ object Protocol {
     /** A telefon állapota. Payload: flags(int32), lásd STATUS_FLAG_*. */
     const val MSG_STATUS: Byte = 4
 
+    /** Hang formátuma. Payload: sampleRate(int32), channels(int32). */
+    const val MSG_AUDIO_CONFIG: Byte = 6
+
+    /** Hangadat: PCM 16 bit, little-endian, interleaved. */
+    const val MSG_AUDIO: Byte = 7
+
     /** Fut a képernyőrögzítés. */
     const val STATUS_FLAG_CAPTURING = 1
     /** Az érintésvezérlés (Kisegítő lehetőségek szolgáltatás) engedélyezve van. */
@@ -81,6 +87,14 @@ class MessageWriter(stream: OutputStream) {
         out.writeByte(type.toInt())
         out.writeInt(payload.size)
         out.write(payload)
+        out.flush()
+    }
+
+    @Synchronized
+    fun write(type: Byte, payload: ByteArray, offset: Int, length: Int) {
+        out.writeByte(type.toInt())
+        out.writeInt(length)
+        out.write(payload, offset, length)
         out.flush()
     }
 

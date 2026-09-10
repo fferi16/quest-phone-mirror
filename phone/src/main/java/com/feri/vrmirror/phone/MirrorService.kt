@@ -55,6 +55,17 @@ class MirrorService : Service() {
             private set
         @Volatile var videoInfo: String = ""
             private set
+
+        private const val PREFS = "vrmirror"
+        private const val PREF_MUTE = "mute"
+
+        fun isMuteEnabled(ctx: android.content.Context): Boolean =
+            ctx.getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(PREF_MUTE, true)
+
+        fun setMuteEnabled(ctx: android.content.Context, enabled: Boolean) {
+            ctx.getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(PREF_MUTE, enabled).apply()
+            instance?.let { s -> s.mainHandler.post { s.updateMute() } }
+        }
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -65,6 +76,9 @@ class MirrorService : Service() {
     private var server: NetServer? = null
     private var discovery: DiscoveryResponder? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var audio: AudioCapturer? = null
+    /** A némítás előtti médiahangerő, ha éppen némítva van. */
+    private var savedVolume: Int? = null
 
     private var screenW = 0
     private var screenH = 0
@@ -148,16 +162,79 @@ class MirrorService : Service() {
         isCapturing = true
         pushStatus()
         updateWakeLock()
+        updateMute()
     }
+
+    private fun hasAudioPermission(): Boolean =
+        checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
 
     private fun startForegroundCompat(notification: Notification) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID, notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-            )
+            var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && hasAudioPermission()) {
+                // A lejátszott hang elkapásához Android 14+ ezt a típust is kéri.
+                type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            }
+            try {
+                startForeground(NOTIFICATION_ID, notification, type)
+            } catch (e: Exception) {
+                Log.w(TAG, "Előtér indítása mikrofon típussal sikertelen, csak mediaProjection: ${e.message}")
+                startForeground(
+                    NOTIFICATION_ID, notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+                )
+            }
         } else {
             startForeground(NOTIFICATION_ID, notification)
+        }
+    }
+
+    // ---- Hang ----
+
+    private val audioListener = object : AudioCapturer.Listener {
+        override fun onAudioConfig(sampleRate: Int, channels: Int) {
+            server?.setAudioConfig(sampleRate, channels)
+        }
+
+        override fun onAudio(data: ByteArray, length: Int) {
+            server?.sendAudio(data, length)
+        }
+    }
+
+    private fun startAudio(mp: MediaProjection) {
+        if (audio != null || !hasAudioPermission()) return
+        try {
+            audio = AudioCapturer(mp, audioListener).also { it.start() }
+            Log.i(TAG, "Hangátvitel elindult")
+        } catch (e: Exception) {
+            Log.w(TAG, "Hangátvitel nem indítható: ${e.message}")
+            audio = null
+        }
+    }
+
+    private fun stopAudio() {
+        audio?.stop()
+        audio = null
+        server?.clearAudio()
+    }
+
+    /** Amíg a Quest csatlakozva van és fut a rögzítés, a telefon médiahangja némítva (ha be van kapcsolva). */
+    private fun updateMute() {
+        val needed = isCapturing && clientAddress != null && isMuteEnabled(this)
+        val am = getSystemService(android.media.AudioManager::class.java) ?: return
+        try {
+            if (needed && savedVolume == null) {
+                savedVolume = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+                am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, 0, 0)
+                Log.i(TAG, "Telefon némítva (előző hangerő: $savedVolume)")
+            } else if (!needed && savedVolume != null) {
+                am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, savedVolume!!, 0)
+                Log.i(TAG, "Telefon hangereje visszaállítva: $savedVolume")
+                savedVolume = null
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Hangerő állítás sikertelen: ${e.message}")
         }
     }
 
@@ -206,6 +283,7 @@ class MirrorService : Service() {
         old?.stop()
 
         videoInfo = "${ew}×${eh}, ${ScreenEncoder.BITRATE / 1_000_000} Mbit/s"
+        startAudio(mp)
     }
 
     /** A rendszer (pl. képernyőzár) leállította a rögzítést: a szerver marad, a rögzítés nem. */
@@ -217,6 +295,7 @@ class MirrorService : Service() {
 
     private fun stopCapture() {
         isCapturing = false
+        stopAudio()
         encoder?.stop()
         encoder = null
         virtualDisplay?.release()
@@ -230,6 +309,7 @@ class MirrorService : Service() {
         server?.clearVideo()
         pushStatus()
         updateWakeLock()
+        updateMute()
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -304,12 +384,18 @@ class MirrorService : Service() {
             clientAddress = address
             warnedNoTouch = false
             encoder?.requestKeyframe()
-            mainHandler.post { updateWakeLock() }
+            mainHandler.post {
+                updateWakeLock()
+                updateMute()
+            }
         }
 
         override fun onClientDisconnected() {
             clientAddress = null
-            mainHandler.post { updateWakeLock() }
+            mainHandler.post {
+                updateWakeLock()
+                updateMute()
+            }
         }
 
         override fun onTouch(action: Int, x: Float, y: Float) {

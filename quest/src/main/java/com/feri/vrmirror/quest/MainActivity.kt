@@ -99,6 +99,7 @@ class MainActivity : AppCompatActivity(), StreamClient.Listener, SurfaceHolder.C
     private fun disconnect() {
         client?.close()
         client = null
+        releaseAudio()
         synchronized(decoderLock) {
             decoder?.release()
             decoder = null
@@ -263,8 +264,36 @@ class MainActivity : AppCompatActivity(), StreamClient.Listener, SurfaceHolder.C
             codecConfig = null
             waitingForKeyframe = true
         }
+        releaseAudio()
         runOnUiThread { hintText.visibility = View.GONE }
         setStatus(getString(R.string.status_disconnected, reason))
+    }
+
+    // ---- Hang ----
+
+    private var audioPlayer: AudioPlayer? = null
+
+    override fun onAudioConfig(sampleRate: Int, channels: Int) {
+        synchronized(decoderLock) {
+            audioPlayer?.release()
+            audioPlayer = try {
+                AudioPlayer(sampleRate, channels)
+            } catch (e: Exception) {
+                Log.e(TAG, "Hanglejátszó hiba: ${e.message}")
+                null
+            }
+        }
+    }
+
+    override fun onAudio(data: ByteArray) {
+        audioPlayer?.enqueue(data)
+    }
+
+    private fun releaseAudio() {
+        synchronized(decoderLock) {
+            audioPlayer?.release()
+            audioPlayer = null
+        }
     }
 
     override fun onStatus(flags: Int) {
