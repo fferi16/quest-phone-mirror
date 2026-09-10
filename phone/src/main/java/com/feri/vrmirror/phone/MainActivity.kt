@@ -67,7 +67,7 @@ class MainActivity : AppCompatActivity() {
         accessibilityButton = findViewById(R.id.accessibilityButton)
 
         startStopButton.setOnClickListener {
-            if (MirrorService.isRunning) {
+            if (MirrorService.isRunning && MirrorService.isCapturing) {
                 startService(Intent(this, MirrorService::class.java).setAction(MirrorService.ACTION_STOP))
             } else {
                 startFlow()
@@ -78,9 +78,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private var autoRequested = false
+
     override fun onResume() {
         super.onResume()
         handler.post(refresher)
+        // Ha a rögzítés leállt (pl. képernyőzár), az értesítésre koppintva rögtön kérjük újra.
+        if (MirrorService.isRunning && !MirrorService.isCapturing && !autoRequested) {
+            autoRequested = true
+            requestProjection()
+        }
     }
 
     override fun onPause() {
@@ -106,15 +113,24 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateUi() {
         val running = MirrorService.isRunning
+        val capturing = MirrorService.isCapturing
         val client = MirrorService.clientAddress
+        if (capturing) autoRequested = false
         statusText.text = when {
             !running -> getString(R.string.status_stopped)
+            !capturing -> getString(R.string.status_paused)
             client == null -> getString(R.string.status_waiting)
             else -> getString(R.string.status_connected, client)
         }
         ipText.text = getString(R.string.ip_label, NetUtils.localIp() ?: getString(R.string.ip_none))
-        videoText.text = if (running) getString(R.string.video_label, MirrorService.videoInfo) else ""
-        startStopButton.setText(if (running) R.string.btn_stop else R.string.btn_start)
+        videoText.text = if (capturing) getString(R.string.video_label, MirrorService.videoInfo) else ""
+        startStopButton.setText(
+            when {
+                !running -> R.string.btn_start
+                !capturing -> R.string.btn_restart
+                else -> R.string.btn_stop
+            }
+        )
 
         val accessibilityOn = TouchInjectorService.instance != null
         accessibilityText.setText(if (accessibilityOn) R.string.accessibility_on else R.string.accessibility_off)

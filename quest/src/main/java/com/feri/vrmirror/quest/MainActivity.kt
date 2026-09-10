@@ -28,6 +28,7 @@ class MainActivity : AppCompatActivity(), StreamClient.Listener, SurfaceHolder.C
     private lateinit var connectButton: Button
     private lateinit var searchButton: Button
     private lateinit var statusText: TextView
+    private lateinit var hintText: TextView
     private lateinit var videoContainer: AspectRatioFrameLayout
     private lateinit var surfaceView: SurfaceView
 
@@ -52,6 +53,7 @@ class MainActivity : AppCompatActivity(), StreamClient.Listener, SurfaceHolder.C
         connectButton = findViewById(R.id.connectButton)
         searchButton = findViewById(R.id.searchButton)
         statusText = findViewById(R.id.statusText)
+        hintText = findViewById(R.id.hintText)
         videoContainer = findViewById(R.id.videoContainer)
         surfaceView = findViewById(R.id.surfaceView)
 
@@ -99,6 +101,7 @@ class MainActivity : AppCompatActivity(), StreamClient.Listener, SurfaceHolder.C
             waitingForKeyframe = true
         }
         connectButton.setText(R.string.btn_connect)
+        hintText.visibility = View.GONE
         setStatus(getString(R.string.status_idle))
     }
 
@@ -161,7 +164,22 @@ class MainActivity : AppCompatActivity(), StreamClient.Listener, SurfaceHolder.C
             codecConfig = null
             waitingForKeyframe = true
         }
+        runOnUiThread { hintText.visibility = View.GONE }
         setStatus(getString(R.string.status_disconnected, reason))
+    }
+
+    override fun onStatus(flags: Int) {
+        val capturing = flags and Protocol.STATUS_FLAG_CAPTURING != 0
+        val touchEnabled = flags and Protocol.STATUS_FLAG_TOUCH_ENABLED != 0
+        Log.i(TAG, "Telefon állapot: rögzítés=$capturing érintés=$touchEnabled")
+        if (!capturing) {
+            synchronized(decoderLock) {
+                codecConfig = null
+                waitingForKeyframe = true
+            }
+            setStatus(getString(R.string.status_capture_stopped))
+        }
+        runOnUiThread { hintText.visibility = if (touchEnabled) View.GONE else View.VISIBLE }
     }
 
     override fun onVideoConfig(width: Int, height: Int) {

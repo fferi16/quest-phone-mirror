@@ -60,6 +60,19 @@
         </com.feri.vrmirror.quest.AspectRatioFrameLayout>
 
         <TextView
+            android:id="@+id/hintText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top"
+            android:background="@color/status_bg"
+            android:gravity="center"
+            android:padding="8dp"
+            android:text="@string/hint_touch_disabled"
+            android:textColor="#FFD54F"
+            android:textSize="13sp"
+            android:visibility="gone" />
+
+        <TextView
             android:id="@+id/statusText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

@@ -18,4 +18,6 @@
     <string name="status_connected">Csatlakozva, várakozás a képre…</string>
     <string name="status_disconnected">Kapcsolat megszakadt: %1$s\nÚjrapróbálás…</string>
     <string name="toast_no_ip">Adj meg egy IP-címet!</string>
+    <string name="status_capture_stopped">A telefon képernyőrögzítése leállt (képernyőzár?).\n\nOldd fel a telefont, és a VR Tükör értesítésére koppintva indítsd újra a megosztást.</string>
+    <string name="hint_touch_disabled">⚠ Az érintésvezérlés nincs engedélyezve a telefonon – a kép látszik, de érinteni nem lehet.</string>
 </resources>

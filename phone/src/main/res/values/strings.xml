@@ -7,6 +7,9 @@
     <string name="status_stopped">Megosztás leállítva</string>
     <string name="status_waiting">Megosztás fut – várakozás a Questre…</string>
     <string name="status_connected">Csatlakozva: %1$s</string>
+    <string name="status_paused">A képernyőrögzítés leállt (képernyőzár vagy rendszer). Indítsd újra a megosztást.</string>
+    <string name="btn_restart">Megosztás újraindítása</string>
+    <string name="notif_text_paused">A rögzítés leállt – koppints az újraindításhoz</string>
     <string name="ip_label">Telefon IP-címe: %1$s</string>
     <string name="ip_none">nincs wifi kapcsolat</string>
     <string name="video_label">Videó: %1$s</string>

@@ -28,6 +28,14 @@ object Protocol {
     /** Egy képkocka. Payload: flags(int32), pts(int64), NAL adat. */
     const val MSG_VIDEO_FRAME: Byte = 3
 
+    /** A telefon állapota. Payload: flags(int32), lásd STATUS_FLAG_*. */
+    const val MSG_STATUS: Byte = 4
+
+    /** Fut a képernyőrögzítés. */
+    const val STATUS_FLAG_CAPTURING = 1
+    /** Az érintésvezérlés (Kisegítő lehetőségek szolgáltatás) engedélyezve van. */
+    const val STATUS_FLAG_TOUCH_ENABLED = 2
+
     // ---- Quest -> Telefon ----
 
     /** Érintés. Payload: action(int8), x(float32), y(float32). x,y: 0..1 arányos. */

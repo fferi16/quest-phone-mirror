@@ -52,10 +52,12 @@ class TouchInjectorService : AccessibilityService() {
         super.onServiceConnected()
         instance = this
         Log.i(TAG, "Érintésvezérlés bekapcsolva")
+        MirrorService.instance?.pushStatus()
     }
 
     override fun onDestroy() {
         instance = null
+        MirrorService.instance?.pushStatus()
         super.onDestroy()
     }
 

@@ -38,6 +38,7 @@ class NetServer(private val listener: Listener) {
     @Volatile private var videoWidth = 0
     @Volatile private var videoHeight = 0
     @Volatile private var codecConfig: ByteArray? = null
+    @Volatile private var statusFlags = 0
 
     val isClientConnected: Boolean get() = writer != null
 
@@ -113,6 +114,7 @@ class NetServer(private val listener: Listener) {
     }
 
     private fun sendInitialConfig(w: MessageWriter) {
+        w.write(Protocol.MSG_STATUS, ByteBuffer.allocate(4).putInt(statusFlags).array())
         if (videoWidth > 0 && videoHeight > 0) {
             w.write(Protocol.MSG_VIDEO_CONFIG, videoConfigPayload(videoWidth, videoHeight))
         }
@@ -128,6 +130,20 @@ class NetServer(private val listener: Listener) {
         videoHeight = h
         codecConfig = null
         send { it.write(Protocol.MSG_VIDEO_CONFIG, videoConfigPayload(w, h)) }
+    }
+
+    /** Állapotjelzők (rögzítés fut-e, érintésvezérlés engedélyezve-e) – változáskor elküldi. */
+    fun setStatus(flags: Int) {
+        if (flags == statusFlags) return
+        statusFlags = flags
+        send { it.write(Protocol.MSG_STATUS, ByteBuffer.allocate(4).putInt(flags).array()) }
+    }
+
+    /** Rögzítés leállásakor: a régi SPS/PPS már nem érvényes. */
+    fun clearVideo() {
+        videoWidth = 0
+        videoHeight = 0
+        codecConfig = null
     }
 
     fun setCodecConfig(data: ByteArray) {
