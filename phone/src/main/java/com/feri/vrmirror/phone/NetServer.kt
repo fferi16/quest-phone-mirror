@@ -8,10 +8,16 @@ import java.io.IOException
 import java.net.ServerSocket
 import java.net.Socket
 import java.nio.ByteBuffer
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * TCP szerver: egyszerre egy Quest klienst szolgál ki.
  * Ha új kliens csatlakozik, a régit lecseréli.
+ *
+ * Minden küldés egy dedikált küldő szálon történik (a fő szálról tilos a hálózat),
+ * és a sorrend garantált: konfiguráció -> codec config -> képkockák.
+ * Ha a hálózat nem bírja az iramot, a képkockákat eldobjuk a következő kulcskockáig.
  */
 class NetServer(private val listener: Listener) {
 
@@ -19,12 +25,15 @@ class NetServer(private val listener: Listener) {
         fun onClientConnected(address: String)
         fun onClientDisconnected()
         fun onTouch(action: Int, x: Float, y: Float)
+        fun onScroll(x: Float, y: Float, dx: Float, dy: Float)
         fun onKey(key: Int)
         fun onKeyframeRequested()
     }
 
     companion object {
         private const val TAG = "NetServer"
+        /** Ennyi képkocka várakozhat küldésre; felette eldobás a következő kulcskockáig. */
+        private const val MAX_QUEUED_FRAMES = 4
     }
 
     private var serverSocket: ServerSocket? = null
@@ -34,6 +43,10 @@ class NetServer(private val listener: Listener) {
     private val lock = Any()
     private var client: Socket? = null
     @Volatile private var writer: MessageWriter? = null
+
+    private val sender = Executors.newSingleThreadExecutor { r -> Thread(r, "NetServer-send") }
+    private val queuedFrames = AtomicInteger(0)
+    @Volatile private var dropUntilKeyframe = false
 
     @Volatile private var videoWidth = 0
     @Volatile private var videoHeight = 0
@@ -75,11 +88,13 @@ class NetServer(private val listener: Listener) {
             old = client
             client = socket
             writer = w
+            dropUntilKeyframe = true
+            // A kezdő konfiguráció a küldő sorba kerül, még mielőtt bármelyik képkocka.
+            submit(w) { sendInitialConfig(it) }
         }
         old?.let { closeQuietly(it) }
 
         try {
-            sendInitialConfig(w)
             listener.onClientConnected(address)
             val reader = MessageReader(socket.getInputStream())
             while (running && client === socket) {
@@ -91,6 +106,10 @@ class NetServer(private val listener: Listener) {
                         val x = bb.float
                         val y = bb.float
                         listener.onTouch(action, x, y)
+                    }
+                    Protocol.MSG_SCROLL -> {
+                        val bb = ByteBuffer.wrap(msg.payload)
+                        listener.onScroll(bb.float, bb.float, bb.float, bb.float)
                     }
                     Protocol.MSG_KEY -> listener.onKey(msg.payload[0].toInt())
                     Protocol.MSG_REQUEST_KEYFRAME -> listener.onKeyframeRequested()
@@ -129,6 +148,7 @@ class NetServer(private val listener: Listener) {
         videoWidth = w
         videoHeight = h
         codecConfig = null
+        dropUntilKeyframe = true
         send { it.write(Protocol.MSG_VIDEO_CONFIG, videoConfigPayload(w, h)) }
     }
 
@@ -152,28 +172,63 @@ class NetServer(private val listener: Listener) {
     }
 
     fun sendFrame(data: ByteArray, keyframe: Boolean, ptsUs: Long) {
-        val header = ByteBuffer.allocate(12)
-            .putInt(if (keyframe) Protocol.FRAME_FLAG_KEYFRAME else 0)
-            .putLong(ptsUs)
-            .array()
-        send { it.write(Protocol.MSG_VIDEO_FRAME, header, data) }
-    }
-
-    private inline fun send(block: (MessageWriter) -> Unit) {
-        val w = writer ?: return
-        try {
-            block(w)
-        } catch (e: IOException) {
-            Log.w(TAG, "Küldés sikertelen: ${e.message}")
-            val s: Socket?
-            synchronized(lock) {
-                s = client
-                if (writer === w) {
-                    writer = null
-                    client = null
+        synchronized(lock) {
+            val w = writer ?: return
+            if (keyframe) {
+                dropUntilKeyframe = false
+            } else if (dropUntilKeyframe) {
+                return
+            }
+            if (!keyframe && queuedFrames.get() >= MAX_QUEUED_FRAMES) {
+                // A hálózat lemaradt: eldobjuk a kockákat a következő kulcskockáig, és kérünk egyet.
+                Log.w(TAG, "Küldési sor tele, képkockák eldobása a következő kulcskockáig")
+                dropUntilKeyframe = true
+                listener.onKeyframeRequested()
+                return
+            }
+            val header = ByteBuffer.allocate(12)
+                .putInt(if (keyframe) Protocol.FRAME_FLAG_KEYFRAME else 0)
+                .putLong(ptsUs)
+                .array()
+            queuedFrames.incrementAndGet()
+            submit(w) {
+                try {
+                    it.write(Protocol.MSG_VIDEO_FRAME, header, data)
+                } finally {
+                    queuedFrames.decrementAndGet()
                 }
             }
-            s?.let { closeQuietly(it) }
+        }
+    }
+
+    /** Vezérlő üzenet küldése az aktuális kliensnek a küldő szálon. */
+    private fun send(block: (MessageWriter) -> Unit) {
+        synchronized(lock) {
+            val w = writer ?: return
+            submit(w, block)
+        }
+    }
+
+    /** Csak lock alatt hívható. */
+    private fun submit(w: MessageWriter, block: (MessageWriter) -> Unit) {
+        if (sender.isShutdown) return
+        sender.execute {
+            try {
+                block(w)
+            } catch (e: IOException) {
+                Log.w(TAG, "Küldés sikertelen: ${e.message}")
+                val s: Socket?
+                synchronized(lock) {
+                    if (writer === w) {
+                        s = client
+                        writer = null
+                        client = null
+                    } else {
+                        s = null
+                    }
+                }
+                s?.let { closeQuietly(it) }
+            }
         }
     }
 
@@ -190,6 +245,7 @@ class NetServer(private val listener: Listener) {
             writer = null
         }
         s?.let { closeQuietly(it) }
+        sender.shutdownNow()
     }
 
     private fun closeQuietly(s: Socket) {

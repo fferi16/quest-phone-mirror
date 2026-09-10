@@ -22,6 +22,11 @@ class MainActivity : AppCompatActivity(), StreamClient.Listener, SurfaceHolder.C
         private const val TAG = "MainActivity"
         private const val PREFS = "vrmirror"
         private const val PREF_IP = "ip"
+
+        private const val JOY_DEADZONE = 0.25f
+        private const val JOY_INTERVAL_MS = 90L
+        /** Teljesen kitolt karral ennyi "fokot" görget egy lépésben. */
+        private const val JOY_STEP = 0.5f
     }
 
     private lateinit var ipInput: EditText
@@ -149,8 +154,102 @@ class MainActivity : AppCompatActivity(), StreamClient.Listener, SurfaceHolder.C
         // Csak az első ujjat/mutatót követjük.
         val nx = (event.getX(0) / v.width).coerceIn(0f, 1f)
         val ny = (event.getY(0) / v.height).coerceIn(0f, 1f)
+        if (action != Protocol.TOUCH_MOVE) {
+            Log.d(TAG, "Érintés: action=$action x=$nx y=$ny forrás=${event.source}")
+        }
         c.sendTouch(action, nx, ny)
         return true
+    }
+
+    // ---- Görgetés: egérgörgő-események és a kontroller hüvelykujj-karja ----
+
+    private val uiHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var joyX = 0f
+    private var joyY = 0f
+    private var joyRunning = false
+    private var lastPointerNx = 0.5f
+    private var lastPointerNy = 0.5f
+
+    private val joyTick = object : Runnable {
+        override fun run() {
+            val c = client
+            val ax = if (kotlin.math.abs(joyX) > JOY_DEADZONE) joyX else 0f
+            val ay = if (kotlin.math.abs(joyY) > JOY_DEADZONE) joyY else 0f
+            if (c == null || (ax == 0f && ay == 0f)) {
+                joyRunning = false
+                return
+            }
+            // Kar felfelé (ay < 0) = a tartalom felfelé gördül = görgő felfelé (dy > 0).
+            c.sendScroll(lastPointerNx, lastPointerNy, ax * JOY_STEP, -ay * JOY_STEP)
+            uiHandler.postDelayed(this, JOY_INTERVAL_MS)
+        }
+    }
+
+    /** A képernyőpozíció (ablak-koordináta) átváltása a videó 0..1 arányos koordinátáira. */
+    private fun rememberPointer(event: MotionEvent) {
+        val loc = IntArray(2)
+        surfaceView.getLocationInWindow(loc)
+        if (surfaceView.width == 0 || surfaceView.height == 0) return
+        val nx = (event.x - loc[0]) / surfaceView.width
+        val ny = (event.y - loc[1]) / surfaceView.height
+        if (nx in 0f..1f && ny in 0f..1f) {
+            lastPointerNx = nx
+            lastPointerNy = ny
+        }
+    }
+
+    override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean {
+        val c = client
+        if (c != null) {
+            val source = ev.source
+            when {
+                ev.actionMasked == MotionEvent.ACTION_SCROLL -> {
+                    rememberPointer(ev)
+                    val dx = ev.getAxisValue(MotionEvent.AXIS_HSCROLL)
+                    val dy = ev.getAxisValue(MotionEvent.AXIS_VSCROLL)
+                    Log.d(TAG, "Görgő: dx=$dx dy=$dy forrás=$source")
+                    if (dx != 0f || dy != 0f) c.sendScroll(lastPointerNx, lastPointerNy, dx, dy)
+                    return true
+                }
+                source and android.view.InputDevice.SOURCE_JOYSTICK == android.view.InputDevice.SOURCE_JOYSTICK &&
+                    ev.actionMasked == MotionEvent.ACTION_MOVE -> {
+                    joyX = ev.getAxisValue(MotionEvent.AXIS_X)
+                    joyY = ev.getAxisValue(MotionEvent.AXIS_Y)
+                    if (joyX == 0f && joyY == 0f) {
+                        // Néhány eszköz a HAT tengelyeken küldi
+                        joyX = ev.getAxisValue(MotionEvent.AXIS_HAT_X)
+                        joyY = ev.getAxisValue(MotionEvent.AXIS_HAT_Y)
+                    }
+                    Log.d(TAG, "Joystick: x=$joyX y=$joyY forrás=$source")
+                    if (!joyRunning && (kotlin.math.abs(joyX) > JOY_DEADZONE || kotlin.math.abs(joyY) > JOY_DEADZONE)) {
+                        joyRunning = true
+                        uiHandler.post(joyTick)
+                    }
+                    return true
+                }
+                ev.actionMasked == MotionEvent.ACTION_HOVER_MOVE -> rememberPointer(ev)
+            }
+        }
+        return super.dispatchGenericMotionEvent(ev)
+    }
+
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        val c = client
+        if (c != null && event.action == android.view.KeyEvent.ACTION_DOWN) {
+            val (dx, dy) = when (event.keyCode) {
+                android.view.KeyEvent.KEYCODE_DPAD_UP -> 0f to 1f
+                android.view.KeyEvent.KEYCODE_DPAD_DOWN -> 0f to -1f
+                android.view.KeyEvent.KEYCODE_DPAD_LEFT -> -1f to 0f
+                android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> 1f to 0f
+                else -> 0f to 0f
+            }
+            if (dx != 0f || dy != 0f) {
+                Log.d(TAG, "DPAD görgetés: dx=$dx dy=$dy")
+                c.sendScroll(lastPointerNx, lastPointerNy, dx, dy)
+                return true
+            }
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     // ---- StreamClient.Listener (hálózati szálon) ----

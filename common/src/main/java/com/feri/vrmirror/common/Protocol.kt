@@ -47,6 +47,12 @@ object Protocol {
     /** Kulcskocka kérése (üres payload). */
     const val MSG_REQUEST_KEYFRAME: Byte = 18
 
+    /**
+     * Görgetés (hüvelykujj-kar / egérgörgő). Payload: x(float32), y(float32), dx(float32), dy(float32).
+     * x,y: 0..1 arányos pozíció; dx,dy: görgetési "fokok" (egy fok kb. egy görgőkattintás).
+     */
+    const val MSG_SCROLL: Byte = 19
+
     const val TOUCH_DOWN = 0
     const val TOUCH_MOVE = 1
     const val TOUCH_UP = 2

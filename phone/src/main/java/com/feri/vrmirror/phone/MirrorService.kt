@@ -324,6 +324,10 @@ class MirrorService : Service() {
             injector.injectTouch(action, x, y)
         }
 
+        override fun onScroll(x: Float, y: Float, dx: Float, dy: Float) {
+            TouchInjectorService.instance?.injectScroll(x, y, dx, dy)
+        }
+
         override fun onKey(key: Int) {
             TouchInjectorService.instance?.pressKey(key)
         }

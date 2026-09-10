@@ -109,6 +109,16 @@ class StreamClient(private val host: String, private val listener: Listener) {
         send(Protocol.MSG_TOUCH, payload)
     }
 
+    fun sendScroll(x: Float, y: Float, dx: Float, dy: Float) {
+        val payload = ByteBuffer.allocate(16)
+            .putFloat(x)
+            .putFloat(y)
+            .putFloat(dx)
+            .putFloat(dy)
+            .array()
+        send(Protocol.MSG_SCROLL, payload)
+    }
+
     fun sendKey(key: Int) {
         send(Protocol.MSG_KEY, byteArrayOf(key.toByte()))
     }
