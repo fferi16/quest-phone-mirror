@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">VR Tükör – Telefon</string>
+    <string name="accessibility_label">VR Tükör érintésvezérlés</string>
+    <string name="accessibility_description">A Meta Quest-ről érkező érintéseket játssza le a telefon képernyőjén. Csak a VR Tükör működéséhez szükséges, nem olvassa a képernyő tartalmát.</string>
+
+    <string name="status_stopped">Megosztás leállítva</string>
+    <string name="status_waiting">Megosztás fut – várakozás a Questre…</string>
+    <string name="status_connected">Csatlakozva: %1$s</string>
+    <string name="ip_label">Telefon IP-címe: %1$s</string>
+    <string name="ip_none">nincs wifi kapcsolat</string>
+    <string name="video_label">Videó: %1$s</string>
+
+    <string name="btn_start">Megosztás indítása</string>
+    <string name="btn_stop">Megosztás leállítása</string>
+    <string name="btn_accessibility">Érintésvezérlés beállítása…</string>
+    <string name="accessibility_on">Érintésvezérlés: engedélyezve ✓</string>
+    <string name="accessibility_off">Érintésvezérlés: NINCS engedélyezve – a Questről nem lehet majd érinteni</string>
+
+    <string name="help_text">Lépések:\n1. Engedélyezd az érintésvezérlést (Kisegítő lehetőségek → Letöltött appok → VR Tükör érintésvezérlés).\n2. Nyomd meg a Megosztás indítása gombot, és engedélyezd a képernyőrögzítést.\n3. A Questen indítsd el a VR Tükör appot, nyomj a Keresés gombra, vagy írd be a fenti IP-címet.</string>
+
+    <string name="notif_channel">Képernyőmegosztás</string>
+    <string name="notif_title">VR Tükör fut</string>
+    <string name="notif_text">A képernyő megosztása a Questnek</string>
+    <string name="notif_stop">Leállítás</string>
+
+    <string name="toast_projection_denied">A képernyőrögzítés engedélye nélkül nem indítható a megosztás.</string>
+</resources>
