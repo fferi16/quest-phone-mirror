@@ -59,6 +59,16 @@ object Protocol {
      */
     const val MSG_SCROLL: Byte = 19
 
+    /**
+     * Kétujjas csippentés. Payload: action(int8: PINCH_START/UPDATE/END), cx(float32), cy(float32), spread(float32).
+     * cx,cy: a két ujj közepe 0..1 arányosan; spread: a két ujj távolsága a videó magasságának arányában.
+     */
+    const val MSG_PINCH: Byte = 20
+
+    const val PINCH_START = 0
+    const val PINCH_UPDATE = 1
+    const val PINCH_END = 2
+
     const val TOUCH_DOWN = 0
     const val TOUCH_MOVE = 1
     const val TOUCH_UP = 2

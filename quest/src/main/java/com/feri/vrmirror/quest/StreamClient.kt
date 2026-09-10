@@ -126,6 +126,16 @@ class StreamClient(private val host: String, private val listener: Listener) {
         send(Protocol.MSG_SCROLL, payload)
     }
 
+    fun sendPinch(action: Int, cx: Float, cy: Float, spread: Float) {
+        val payload = ByteBuffer.allocate(13)
+            .put(action.toByte())
+            .putFloat(cx)
+            .putFloat(cy)
+            .putFloat(spread)
+            .array()
+        send(Protocol.MSG_PINCH, payload)
+    }
+
     fun sendKey(key: Int) {
         send(Protocol.MSG_KEY, byteArrayOf(key.toByte()))
     }

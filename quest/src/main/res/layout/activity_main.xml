@@ -114,5 +114,13 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/btn_recents" />
+
+        <Button
+            android:id="@+id/zoomButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:alpha="0.5"
+            android:text="@string/btn_zoom" />
     </LinearLayout>
 </LinearLayout>

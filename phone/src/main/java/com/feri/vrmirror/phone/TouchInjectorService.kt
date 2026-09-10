@@ -70,9 +70,145 @@ class TouchInjectorService : AccessibilityService() {
         handler.post { handleTouch(action, nx, ny) }
     }
 
-    /** Görgetés a (nx,ny) pontból: dx,dy "fok" (egy fok = a képernyő ~15%-a). */
+    /** Görgetés a (nx,ny) pontból: dx,dy "fok". */
     fun injectScroll(nx: Float, ny: Float, dx: Float, dy: Float) {
         handler.post { handleScroll(nx, ny, dx, dy) }
+    }
+
+    /** Kétujjas csippentés: közép (cx,cy) arányosan, spread = ujjtávolság a képernyő magasságának arányában. */
+    fun injectPinch(action: Int, cx: Float, cy: Float, spread: Float) {
+        handler.post { handlePinch(action, cx, cy, spread) }
+    }
+
+    // ---- Csippentés (két virtuális ujj) ----
+
+    private var pinchA: GestureDescription.StrokeDescription? = null
+    private var pinchB: GestureDescription.StrokeDescription? = null
+    private var pinchLastA = PointF()
+    private var pinchLastB = PointF()
+    private var pinchLastTime = 0L
+    private var pinchBusy = false
+    private var pinchToken = 0
+    private var pinchPendingAction = -1
+    private var pinchPendingA = PointF()
+    private var pinchPendingB = PointF()
+
+    /** A két ujj helye a középpont és a távolság alapján (45 fokos átló mentén). */
+    private fun pinchPoints(cx: Float, cy: Float, spread: Float): Pair<PointF, PointF> {
+        val size = screenSize()
+        val c = screenPoint(cx, cy)
+        val half = (spread.coerceIn(0.02f, 1.5f) * size.y / 2f)
+        val off = half * 0.7071f
+        val a = PointF((c.x - off).coerceIn(1f, size.x - 2f), (c.y - off).coerceIn(1f, size.y - 2f))
+        val b = PointF((c.x + off).coerceIn(1f, size.x - 2f), (c.y + off).coerceIn(1f, size.y - 2f))
+        return a to b
+    }
+
+    private fun handlePinch(action: Int, cx: Float, cy: Float, spread: Float) {
+        val (a, b) = pinchPoints(cx, cy, spread)
+        when (action) {
+            Protocol.PINCH_START -> {
+                // Minden más gesztust eldobunk.
+                handler.removeCallbacks(scrollEnd)
+                scrollActive = false
+                stroke = null
+                busy = false
+                busyToken++
+                pendingAction = -1
+                pinchA = null
+                pinchB = null
+                pinchBusy = false
+                pinchToken++
+                pinchPendingAction = -1
+                Log.d(TAG, "Csippentés kezdete: A=(${a.x},${a.y}) B=(${b.x},${b.y})")
+                val sa = GestureDescription.StrokeDescription(Path().apply { moveTo(a.x, a.y); lineTo(a.x, a.y) }, 0, 1, true)
+                val sb = GestureDescription.StrokeDescription(Path().apply { moveTo(b.x, b.y); lineTo(b.x, b.y) }, 0, 1, true)
+                dispatchPinch(sa, sb, a, b, willContinue = true)
+            }
+            Protocol.PINCH_UPDATE, Protocol.PINCH_END -> {
+                if (pinchA == null || pinchB == null) return
+                if (pinchBusy) {
+                    // Egy UPDATE után jövő END nem veszhet el.
+                    if (pinchPendingAction != Protocol.PINCH_END) pinchPendingAction = action
+                    pinchPendingA = a
+                    pinchPendingB = b
+                    return
+                }
+                continuePinch(a, b, willContinue = action == Protocol.PINCH_UPDATE)
+            }
+        }
+    }
+
+    private fun continuePinch(a: PointF, b: PointF, willContinue: Boolean) {
+        val ca = pinchA ?: return
+        val cb = pinchB ?: return
+        val now = SystemClock.uptimeMillis()
+        val duration = (now - pinchLastTime).coerceIn(1L, MAX_SEGMENT_MS)
+        val na = try {
+            ca.continueStroke(Path().apply { moveTo(pinchLastA.x, pinchLastA.y); lineTo(a.x, a.y) }, 0, duration, willContinue)
+        } catch (e: Exception) {
+            Log.w(TAG, "continueStroke (A) hiba: ${e.message}"); pinchA = null; pinchB = null; return
+        }
+        val nb = try {
+            cb.continueStroke(Path().apply { moveTo(pinchLastB.x, pinchLastB.y); lineTo(b.x, b.y) }, 0, duration, willContinue)
+        } catch (e: Exception) {
+            Log.w(TAG, "continueStroke (B) hiba: ${e.message}"); pinchA = null; pinchB = null; return
+        }
+        if (!willContinue) Log.d(TAG, "Csippentés vége")
+        dispatchPinch(na, nb, a, b, willContinue)
+    }
+
+    private fun dispatchPinch(
+        sa: GestureDescription.StrokeDescription,
+        sb: GestureDescription.StrokeDescription,
+        a: PointF, b: PointF, willContinue: Boolean
+    ) {
+        pinchA = if (willContinue) sa else null
+        pinchB = if (willContinue) sb else null
+        pinchLastA = a
+        pinchLastB = b
+        pinchLastTime = SystemClock.uptimeMillis()
+        pinchBusy = true
+        val token = ++pinchToken
+
+        val gesture = GestureDescription.Builder().addStroke(sa).addStroke(sb).build()
+        val ok = dispatchGesture(gesture, object : GestureResultCallback() {
+            override fun onCompleted(gestureDescription: GestureDescription?) {
+                if (token != pinchToken) return
+                pinchBusy = false
+                flushPinchPending()
+            }
+
+            override fun onCancelled(gestureDescription: GestureDescription?) {
+                if (token != pinchToken) return
+                Log.w(TAG, "Csippentés megszakítva (willContinue=$willContinue)")
+                pinchBusy = false
+                pinchA = null
+                pinchB = null
+                pinchPendingAction = -1
+            }
+        }, handler)
+        if (!ok) {
+            Log.w(TAG, "dispatchGesture (csippentés) visszautasítva")
+            pinchBusy = false
+            pinchA = null
+            pinchB = null
+            pinchPendingAction = -1
+            return
+        }
+        handler.postDelayed({
+            if (token == pinchToken && pinchBusy) {
+                pinchBusy = false
+                flushPinchPending()
+            }
+        }, sa.duration + 100)
+    }
+
+    private fun flushPinchPending() {
+        val action = pinchPendingAction
+        pinchPendingAction = -1
+        if (pinchA == null || pinchB == null || action < 0) return
+        continuePinch(pinchPendingA, pinchPendingB, willContinue = action == Protocol.PINCH_UPDATE)
     }
 
     fun pressKey(key: Int) {
@@ -178,6 +314,14 @@ class TouchInjectorService : AccessibilityService() {
         if (scrollActive && action == Protocol.TOUCH_DOWN) {
             handler.removeCallbacks(scrollEnd)
             scrollActive = false
+        }
+        if (action == Protocol.TOUCH_DOWN && pinchA != null) {
+            // Csippentés közben érkező új érintés: a csippentést eldobjuk.
+            pinchA = null
+            pinchB = null
+            pinchToken++
+            pinchBusy = false
+            pinchPendingAction = -1
         }
         handleTouchPx(action, screenPoint(nx, ny))
     }

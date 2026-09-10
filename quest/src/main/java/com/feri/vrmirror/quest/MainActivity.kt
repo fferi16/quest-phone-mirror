@@ -75,6 +75,76 @@ class MainActivity : AppCompatActivity(), StreamClient.Listener, SurfaceHolder.C
         findViewById<Button>(R.id.backButton).setOnClickListener { client?.sendKey(Protocol.KEY_BACK) }
         findViewById<Button>(R.id.homeButton).setOnClickListener { client?.sendKey(Protocol.KEY_HOME) }
         findViewById<Button>(R.id.recentsButton).setOnClickListener { client?.sendKey(Protocol.KEY_RECENTS) }
+
+        zoomButton = findViewById(R.id.zoomButton)
+        zoomButton.setOnClickListener { setZoomMode(!zoomMode) }
+    }
+
+    // ---- Nagyítás mód (joystick = csippentés) ----
+
+    private lateinit var zoomButton: Button
+    private var zoomMode = false
+
+    private fun setZoomMode(on: Boolean) {
+        zoomMode = on
+        zoomButton.alpha = if (on) 1f else 0.5f
+        endJoyPinch()
+        if (on) {
+            Toast.makeText(this, R.string.hint_zoom_mode, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /** Joystick-vezérelt csippentés állapota. */
+    private var joyPinchActive = false
+    private var joyPinchSpread = 0f
+    private var joyPinchCx = 0.5f
+    private var joyPinchCy = 0.5f
+    private val joyPinchEnd = Runnable { endJoyPinch() }
+
+    private fun joyPinchStep(factor: Float) {
+        val c = client ?: return
+        if (!joyPinchActive) {
+            joyPinchActive = true
+            joyPinchSpread = 0.25f
+            joyPinchCx = lastPointerNx
+            joyPinchCy = lastPointerNy
+            c.sendPinch(Protocol.PINCH_START, joyPinchCx, joyPinchCy, joyPinchSpread)
+        }
+        var next = joyPinchSpread * factor
+        if (next < 0.05f || next > 0.8f) {
+            // Elértük a határt: az ujjakat felemeljük, és középről folytatjuk.
+            c.sendPinch(Protocol.PINCH_END, joyPinchCx, joyPinchCy, joyPinchSpread)
+            joyPinchSpread = 0.25f
+            c.sendPinch(Protocol.PINCH_START, joyPinchCx, joyPinchCy, joyPinchSpread)
+            next = joyPinchSpread * factor
+        }
+        joyPinchSpread = next
+        c.sendPinch(Protocol.PINCH_UPDATE, joyPinchCx, joyPinchCy, joyPinchSpread)
+        uiHandler.removeCallbacks(joyPinchEnd)
+        uiHandler.postDelayed(joyPinchEnd, 200)
+    }
+
+    private fun endJoyPinch() {
+        uiHandler.removeCallbacks(joyPinchEnd)
+        if (!joyPinchActive) return
+        joyPinchActive = false
+        client?.sendPinch(Protocol.PINCH_END, joyPinchCx, joyPinchCy, joyPinchSpread)
+    }
+
+    // ---- Valódi kétujjas csippentés (kézkövetés / két kontroller) ----
+
+    private var realPinchActive = false
+    private var ignoreUntilNextDown = false
+
+    private fun sendRealPinch(action: Int, v: View, event: MotionEvent) {
+        val c = client ?: return
+        val x0 = event.getX(0); val y0 = event.getY(0)
+        val x1 = event.getX(1); val y1 = event.getY(1)
+        val cx = ((x0 + x1) / 2f / v.width).coerceIn(0f, 1f)
+        val cy = ((y0 + y1) / 2f / v.height).coerceIn(0f, 1f)
+        val dist = kotlin.math.hypot((x1 - x0).toDouble(), (y1 - y0).toDouble()).toFloat()
+        val spread = (dist / v.height).coerceIn(0.02f, 1.5f)
+        c.sendPinch(action, cx, cy, spread)
     }
 
     override fun onDestroy() {
@@ -97,6 +167,7 @@ class MainActivity : AppCompatActivity(), StreamClient.Listener, SurfaceHolder.C
     }
 
     private fun disconnect() {
+        endJoyPinch()
         client?.close()
         client = null
         releaseAudio()
@@ -144,6 +215,52 @@ class MainActivity : AppCompatActivity(), StreamClient.Listener, SurfaceHolder.C
 
     private fun handleTouch(v: View, event: MotionEvent): Boolean {
         val c = client ?: return false
+        if (v.width == 0 || v.height == 0) return true
+
+        // Két mutató: valódi csippentés.
+        when (event.actionMasked) {
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                if (event.pointerCount == 2) {
+                    // Az egyujjas húzást megszakítjuk, csippentés indul.
+                    c.sendTouch(Protocol.TOUCH_CANCEL, (event.getX(0) / v.width).coerceIn(0f, 1f), (event.getY(0) / v.height).coerceIn(0f, 1f))
+                    realPinchActive = true
+                    Log.d(TAG, "Kétujjas csippentés kezdete")
+                    sendRealPinch(Protocol.PINCH_START, v, event)
+                }
+                return true
+            }
+            MotionEvent.ACTION_POINTER_UP -> {
+                if (realPinchActive && event.pointerCount == 2) {
+                    sendRealPinch(Protocol.PINCH_END, v, event)
+                    realPinchActive = false
+                    ignoreUntilNextDown = true
+                }
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (realPinchActive) {
+                    if (event.pointerCount >= 2) sendRealPinch(Protocol.PINCH_UPDATE, v, event)
+                    return true
+                }
+                if (ignoreUntilNextDown) return true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (realPinchActive) {
+                    realPinchActive = false
+                    ignoreUntilNextDown = false
+                    return true
+                }
+                if (ignoreUntilNextDown) {
+                    ignoreUntilNextDown = false
+                    return true
+                }
+            }
+            MotionEvent.ACTION_DOWN -> {
+                ignoreUntilNextDown = false
+                realPinchActive = false
+            }
+        }
+
         val action = when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> Protocol.TOUCH_DOWN
             MotionEvent.ACTION_MOVE -> Protocol.TOUCH_MOVE
@@ -151,7 +268,6 @@ class MainActivity : AppCompatActivity(), StreamClient.Listener, SurfaceHolder.C
             MotionEvent.ACTION_CANCEL -> Protocol.TOUCH_CANCEL
             else -> return true
         }
-        if (v.width == 0 || v.height == 0) return true
         // Csak az első ujjat/mutatót követjük.
         val nx = (event.getX(0) / v.width).coerceIn(0f, 1f)
         val ny = (event.getY(0) / v.height).coerceIn(0f, 1f)
@@ -180,8 +296,13 @@ class MainActivity : AppCompatActivity(), StreamClient.Listener, SurfaceHolder.C
                 joyRunning = false
                 return
             }
-            // Kar felfelé (ay < 0) = a tartalom felfelé gördül = görgő felfelé (dy > 0).
-            c.sendScroll(lastPointerNx, lastPointerNy, ax * JOY_STEP, -ay * JOY_STEP)
+            if (zoomMode) {
+                // Kar felfelé (ay < 0) = nagyítás.
+                joyPinchStep(1f - ay * 0.05f)
+            } else {
+                // Kar felfelé (ay < 0) = a tartalom felfelé gördül = görgő felfelé (dy > 0).
+                c.sendScroll(lastPointerNx, lastPointerNy, ax * JOY_STEP, -ay * JOY_STEP)
+            }
             uiHandler.postDelayed(this, JOY_INTERVAL_MS)
         }
     }
@@ -208,8 +329,12 @@ class MainActivity : AppCompatActivity(), StreamClient.Listener, SurfaceHolder.C
                     rememberPointer(ev)
                     val dx = ev.getAxisValue(MotionEvent.AXIS_HSCROLL)
                     val dy = ev.getAxisValue(MotionEvent.AXIS_VSCROLL)
-                    Log.d(TAG, "Görgő: dx=$dx dy=$dy forrás=$source")
-                    if (dx != 0f || dy != 0f) c.sendScroll(lastPointerNx, lastPointerNy, dx, dy)
+                    if (zoomMode) {
+                        // Görgő/joystick felfelé (dy > 0) = nagyítás.
+                        if (dy != 0f) joyPinchStep(1f + dy * 0.2f)
+                    } else if (dx != 0f || dy != 0f) {
+                        c.sendScroll(lastPointerNx, lastPointerNy, dx, dy)
+                    }
                     return true
                 }
                 source and android.view.InputDevice.SOURCE_JOYSTICK == android.view.InputDevice.SOURCE_JOYSTICK &&
@@ -245,8 +370,11 @@ class MainActivity : AppCompatActivity(), StreamClient.Listener, SurfaceHolder.C
                 else -> 0f to 0f
             }
             if (dx != 0f || dy != 0f) {
-                Log.d(TAG, "DPAD görgetés: dx=$dx dy=$dy")
-                c.sendScroll(lastPointerNx, lastPointerNy, dx, dy)
+                if (zoomMode) {
+                    if (dy != 0f) joyPinchStep(1f + dy * 0.15f)
+                } else {
+                    c.sendScroll(lastPointerNx, lastPointerNy, dx, dy)
+                }
                 return true
             }
         }

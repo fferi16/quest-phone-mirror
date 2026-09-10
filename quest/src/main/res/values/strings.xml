@@ -9,6 +9,8 @@
     <string name="btn_back">◁ Vissza</string>
     <string name="btn_home">○ Kezdőlap</string>
     <string name="btn_recents">□ Appok</string>
+    <string name="btn_zoom">🔍 Nagyítás</string>
+    <string name="hint_zoom_mode">Nagyítás mód: a hüvelykujj-kar fel/le nagyít-kicsinyít a mutató helyén. Kikapcsoláshoz nyomd meg újra a gombot.</string>
 
     <string name="status_idle">Írd be a telefon IP-címét, vagy nyomj a Keresés gombra.\n\nA telefonon a VR Tükör – Telefon appban indítsd el a megosztást.</string>
     <string name="status_searching">Telefon keresése a hálózaton…</string>

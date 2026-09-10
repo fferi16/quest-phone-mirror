@@ -26,6 +26,7 @@ class NetServer(private val listener: Listener) {
         fun onClientDisconnected()
         fun onTouch(action: Int, x: Float, y: Float)
         fun onScroll(x: Float, y: Float, dx: Float, dy: Float)
+        fun onPinch(action: Int, cx: Float, cy: Float, spread: Float)
         fun onKey(key: Int)
         fun onKeyframeRequested()
     }
@@ -116,6 +117,11 @@ class NetServer(private val listener: Listener) {
                     Protocol.MSG_SCROLL -> {
                         val bb = ByteBuffer.wrap(msg.payload)
                         listener.onScroll(bb.float, bb.float, bb.float, bb.float)
+                    }
+                    Protocol.MSG_PINCH -> {
+                        val bb = ByteBuffer.wrap(msg.payload)
+                        val action = bb.get().toInt()
+                        listener.onPinch(action, bb.float, bb.float, bb.float)
                     }
                     Protocol.MSG_KEY -> listener.onKey(msg.payload[0].toInt())
                     Protocol.MSG_REQUEST_KEYFRAME -> listener.onKeyframeRequested()
