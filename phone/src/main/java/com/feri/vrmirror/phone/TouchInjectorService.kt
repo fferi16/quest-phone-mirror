@@ -326,7 +326,33 @@ class TouchInjectorService : AccessibilityService() {
         handleTouchPx(action, screenPoint(nx, ny))
     }
 
-    private fun handleTouchPx(action: Int, p: PointF) {
+    // Koppintás-holtsáv: a Quest mutatója remeg, ezért a lenyomás helyétől
+    // csak akkor mozdulunk el, ha a mozgás meghaladja a küszöböt. Így a koppintás
+    // tiszta koppintás marad, nem apró húzás.
+    private var downPoint = PointF()
+    private var withinSlop = false
+
+    private fun handleTouchPx(action: Int, rawPoint: PointF) {
+        var p = rawPoint
+        when (action) {
+            Protocol.TOUCH_DOWN -> {
+                downPoint = PointF(p.x, p.y)
+                withinSlop = true
+            }
+            Protocol.TOUCH_MOVE -> {
+                if (withinSlop) {
+                    val slop = screenSize().y * 0.015f
+                    val dx = p.x - downPoint.x
+                    val dy = p.y - downPoint.y
+                    if (dx * dx + dy * dy < slop * slop) return
+                    withinSlop = false
+                }
+            }
+            Protocol.TOUCH_UP, Protocol.TOUCH_CANCEL -> {
+                if (withinSlop) p = downPoint
+                withinSlop = false
+            }
+        }
         if (action != Protocol.TOUCH_MOVE) {
             Log.d(TAG, "Érintés: action=$action (${p.x},${p.y}) busy=$busy stroke=${stroke != null}")
         }
