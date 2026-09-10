@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.VRMirror" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">#B4C2FF</item>
+        <item name="colorOnPrimary">#0A2588</item>
+        <item name="colorPrimaryContainer">#2842BF</item>
+        <item name="colorOnPrimaryContainer">#DCE1FF</item>
+        <item name="colorSecondary">#C3C5DD</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

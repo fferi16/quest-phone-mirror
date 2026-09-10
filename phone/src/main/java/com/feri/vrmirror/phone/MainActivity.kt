@@ -61,7 +61,7 @@ class MainActivity : AppCompatActivity() {
             requestProjection()
         }
 
-    private lateinit var muteCheckBox: android.widget.CheckBox
+    private lateinit var muteCheckBox: android.widget.CompoundButton
 
     private fun requestAudioThenProjection() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
@@ -158,5 +158,8 @@ class MainActivity : AppCompatActivity() {
 
         val accessibilityOn = TouchInjectorService.instance != null
         accessibilityText.setText(if (accessibilityOn) R.string.accessibility_on else R.string.accessibility_off)
+        accessibilityText.setTextColor(
+            ContextCompat.getColor(this, if (accessibilityOn) R.color.status_ok else R.color.status_warn)
+        )
     }
 }

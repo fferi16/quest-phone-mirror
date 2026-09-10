@@ -9,10 +9,15 @@
     <string name="btn_back">◁ Vissza</string>
     <string name="btn_home">○ Kezdőlap</string>
     <string name="btn_recents">□ Appok</string>
-    <string name="btn_zoom">🔍 Nagyítás</string>
+    <string name="btn_zoom">Nagyítás</string>
+    <string name="btn_menu">Menü</string>
+    <string name="btn_close">Bezárás</string>
+    <string name="settings_title">Kapcsolat</string>
+    <string name="setting_sidebar_always">Ikonoszlop mindig halványan látszik</string>
+    <string name="settings_help">Alapból csak a telefon képe látszik. Az ikonoszlop előjön, ha a panel jobb szélére mutatsz: Vissza · Kezdőlap · Appok · Nagyítás (joystick nagyít) · Menü.</string>
     <string name="hint_zoom_mode">Nagyítás mód: a hüvelykujj-kar fel/le nagyít-kicsinyít a mutató helyén. Kikapcsoláshoz nyomd meg újra a gombot.</string>
 
-    <string name="status_idle">Írd be a telefon IP-címét, vagy nyomj a Keresés gombra.\n\nA telefonon a VR Tükör – Telefon appban indítsd el a megosztást.</string>
+    <string name="status_idle">Nincs kapcsolat.\n\nA jobb oldali ⋮ menüben add meg a telefon IP-címét, vagy nyomj a Keresés gombra.\nA telefonon a VR Tükör – Telefon appban indítsd el a megosztást.</string>
     <string name="status_searching">Telefon keresése a hálózaton…</string>
     <string name="status_not_found">Nem található telefon. Fut a megosztás? Ugyanazon a wifin vagytok?</string>
     <string name="status_found">Megtalálva: %1$s</string>

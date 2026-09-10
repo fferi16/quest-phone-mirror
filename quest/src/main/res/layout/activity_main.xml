@@ -1,126 +1,194 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@android:color/black"
-    android:orientation="vertical">
+    android:background="@android:color/black">
 
-    <!-- Felső sáv: IP + csatlakozás -->
-    <LinearLayout
-        android:id="@+id/toolbar"
+    <!-- A telefon képe: a teljes panelt kitölti (képarány-tartással) -->
+    <com.feri.vrmirror.quest.AspectRatioFrameLayout
+        android:id="@+id/videoContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="center">
+
+        <SurfaceView
+            android:id="@+id/surfaceView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </com.feri.vrmirror.quest.AspectRatioFrameLayout>
+
+    <!-- Figyelmeztetés felül (pl. nincs érintésvezérlés) -->
+    <TextView
+        android:id="@+id/hintText"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/toolbar_bg"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:padding="4dp">
+        android:layout_gravity="top"
+        android:background="@color/status_bg"
+        android:gravity="center"
+        android:padding="8dp"
+        android:text="@string/hint_touch_disabled"
+        android:textColor="#FFD54F"
+        android:textSize="13sp"
+        android:visibility="gone" />
 
-        <EditText
-            android:id="@+id/ipInput"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:hint="@string/ip_hint"
-            android:imeOptions="actionDone"
-            android:importantForAutofill="no"
-            android:inputType="text"
-            android:maxLines="1"
-            android:textColor="@android:color/white"
-            android:textColorHint="#888888" />
-
-        <Button
-            android:id="@+id/connectButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/btn_connect" />
-
-        <Button
-            android:id="@+id/searchButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/btn_search" />
-    </LinearLayout>
-
-    <!-- Kép -->
-    <FrameLayout
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1">
-
-        <com.feri.vrmirror.quest.AspectRatioFrameLayout
-            android:id="@+id/videoContainer"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:layout_gravity="center">
-
-            <SurfaceView
-                android:id="@+id/surfaceView"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent" />
-        </com.feri.vrmirror.quest.AspectRatioFrameLayout>
-
-        <TextView
-            android:id="@+id/hintText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_gravity="top"
-            android:background="@color/status_bg"
-            android:gravity="center"
-            android:padding="8dp"
-            android:text="@string/hint_touch_disabled"
-            android:textColor="#FFD54F"
-            android:textSize="13sp"
-            android:visibility="gone" />
-
-        <TextView
-            android:id="@+id/statusText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_margin="24dp"
-            android:background="@color/status_bg"
-            android:gravity="center"
-            android:padding="16dp"
-            android:text="@string/status_idle"
-            android:textColor="@android:color/white"
-            android:textSize="16sp" />
-    </FrameLayout>
-
-    <!-- Alsó sáv: rendszergombok -->
-    <LinearLayout
-        android:id="@+id/navbar"
-        android:layout_width="match_parent"
+    <!-- Állapot középen -->
+    <TextView
+        android:id="@+id/statusText"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:background="@color/toolbar_bg"
-        android:orientation="horizontal">
+        android:layout_gravity="center"
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="64dp"
+        android:background="@color/status_bg"
+        android:gravity="center"
+        android:padding="16dp"
+        android:text="@string/status_idle"
+        android:textColor="@android:color/white"
+        android:textSize="16sp" />
 
-        <Button
+    <!-- Jobb oldali, áttetsző ikonoszlop -->
+    <LinearLayout
+        android:id="@+id/sideBar"
+        android:layout_width="48dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|center_vertical"
+        android:alpha="0.4"
+        android:background="@drawable/bg_sidebar"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp">
+
+        <TextView
+            android:id="@+id/statusDot"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="4dp"
+            android:text="●"
+            android:textColor="#9E9E9E"
+            android:textSize="12sp" />
+
+        <ImageButton
             android:id="@+id/backButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/btn_back" />
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/btn_back"
+            android:src="@drawable/ic_back" />
 
-        <Button
+        <ImageButton
             android:id="@+id/homeButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/btn_home" />
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/btn_home"
+            android:src="@drawable/ic_home" />
 
-        <Button
+        <ImageButton
             android:id="@+id/recentsButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/btn_recents" />
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/btn_recents"
+            android:src="@drawable/ic_recents" />
 
-        <Button
+        <ImageButton
             android:id="@+id/zoomButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:alpha="0.5"
-            android:text="@string/btn_zoom" />
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/btn_zoom"
+            android:src="@drawable/ic_zoom" />
+
+        <ImageButton
+            android:id="@+id/menuButton"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/btn_menu"
+            android:src="@drawable/ic_menu" />
     </LinearLayout>
-</LinearLayout>
+
+    <!-- Kapcsolat-beállítások: alulról előjövő lap -->
+    <LinearLayout
+        android:id="@+id/settingsPanel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="@drawable/bg_settings"
+        android:orientation="vertical"
+        android:padding="14dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_title"
+            android:textColor="@android:color/white"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/ipInput"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="@string/ip_hint"
+                android:imeOptions="actionDone"
+                android:importantForAutofill="no"
+                android:inputType="text"
+                android:maxLines="1"
+                android:textColor="@android:color/white"
+                android:textColorHint="#888888" />
+
+            <Button
+                android:id="@+id/searchButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/btn_search" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/connectButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/btn_connect" />
+
+            <Button
+                android:id="@+id/closeSettingsButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/btn_close" />
+        </LinearLayout>
+
+        <Switch
+            android:id="@+id/sideBarSwitch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="@string/setting_sidebar_always"
+            android:textColor="@android:color/white" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="@string/settings_help"
+            android:textColor="#BBBBBB"
+            android:textSize="12sp" />
+    </LinearLayout>
+</FrameLayout>

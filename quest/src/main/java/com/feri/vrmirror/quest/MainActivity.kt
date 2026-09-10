@@ -10,6 +10,7 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.View
 import android.widget.Button
+import android.widget.ImageButton
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
@@ -22,6 +23,7 @@ class MainActivity : AppCompatActivity(), StreamClient.Listener, SurfaceHolder.C
         private const val TAG = "MainActivity"
         private const val PREFS = "vrmirror"
         private const val PREF_IP = "ip"
+        private const val PREF_SIDEBAR = "sidebar_always"
 
         private const val JOY_DEADZONE = 0.25f
         private const val JOY_INTERVAL_MS = 90L
@@ -72,22 +74,84 @@ class MainActivity : AppCompatActivity(), StreamClient.Listener, SurfaceHolder.C
         }
         searchButton.setOnClickListener { search() }
 
-        findViewById<Button>(R.id.backButton).setOnClickListener { client?.sendKey(Protocol.KEY_BACK) }
-        findViewById<Button>(R.id.homeButton).setOnClickListener { client?.sendKey(Protocol.KEY_HOME) }
-        findViewById<Button>(R.id.recentsButton).setOnClickListener { client?.sendKey(Protocol.KEY_RECENTS) }
+        findViewById<ImageButton>(R.id.backButton).setOnClickListener { client?.sendKey(Protocol.KEY_BACK) }
+        findViewById<ImageButton>(R.id.homeButton).setOnClickListener { client?.sendKey(Protocol.KEY_HOME) }
+        findViewById<ImageButton>(R.id.recentsButton).setOnClickListener { client?.sendKey(Protocol.KEY_RECENTS) }
 
         zoomButton = findViewById(R.id.zoomButton)
         zoomButton.setOnClickListener { setZoomMode(!zoomMode) }
+
+        sideBar = findViewById(R.id.sideBar)
+        statusDot = findViewById(R.id.statusDot)
+        settingsPanel = findViewById(R.id.settingsPanel)
+        findViewById<ImageButton>(R.id.menuButton).setOnClickListener { toggleSettings() }
+        findViewById<Button>(R.id.closeSettingsButton).setOnClickListener { showSettings(false) }
+        setupSideBarFade()
+
+        // Ha nincs mentett IP, rögtön a beállításokat mutatjuk.
+        if (ipInput.text.isNullOrBlank()) showSettings(true)
+    }
+
+    // ---- Oldalsó ikonoszlop: rámutatásra teljesen látszik, utána elhalványul ----
+
+    private lateinit var sideBar: View
+    private lateinit var statusDot: TextView
+    private lateinit var settingsPanel: View
+    private var sideBarAlwaysVisible = false
+    private val idleAlpha: Float get() = if (sideBarAlwaysVisible) 0.4f else 0f
+    private val sideBarFade = Runnable { sideBar.animate().alpha(idleAlpha).setDuration(400).start() }
+
+    private fun setupSideBarFade() {
+        val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+        sideBarAlwaysVisible = prefs.getBoolean(PREF_SIDEBAR, false)
+        sideBar.alpha = idleAlpha
+        val sw = findViewById<android.widget.Switch>(R.id.sideBarSwitch)
+        sw.isChecked = sideBarAlwaysVisible
+        sw.setOnCheckedChangeListener { _, checked ->
+            sideBarAlwaysVisible = checked
+            prefs.edit().putBoolean(PREF_SIDEBAR, checked).apply()
+            scheduleSideBarFade()
+        }
+        sideBar.setOnHoverListener { _, ev ->
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_HOVER_ENTER -> wakeSideBar(keep = true)
+                MotionEvent.ACTION_HOVER_EXIT -> scheduleSideBarFade()
+            }
+            false
+        }
+        sideBar.setOnTouchListener { _, _ -> wakeSideBar(keep = false); false }
+    }
+
+    private fun wakeSideBar(keep: Boolean) {
+        uiHandler.removeCallbacks(sideBarFade)
+        sideBar.animate().alpha(1f).setDuration(120).start()
+        if (!keep) scheduleSideBarFade()
+    }
+
+    private fun scheduleSideBarFade() {
+        uiHandler.removeCallbacks(sideBarFade)
+        uiHandler.postDelayed(sideBarFade, 1500)
+    }
+
+    private fun toggleSettings() = showSettings(settingsPanel.visibility != View.VISIBLE)
+
+    private fun showSettings(show: Boolean) {
+        settingsPanel.visibility = if (show) View.VISIBLE else View.GONE
+    }
+
+    /** Kapcsolat-jelző pötty színe: szürke = nincs, sárga = próbálkozik, zöld = kapcsolódva. */
+    private fun setDot(color: Int) {
+        runOnUiThread { statusDot.setTextColor(color) }
     }
 
     // ---- Nagyítás mód (joystick = csippentés) ----
 
-    private lateinit var zoomButton: Button
+    private lateinit var zoomButton: ImageButton
     private var zoomMode = false
 
     private fun setZoomMode(on: Boolean) {
         zoomMode = on
-        zoomButton.alpha = if (on) 1f else 0.5f
+        zoomButton.setColorFilter(if (on) 0xFFFFD54F.toInt() else 0xFFFFFFFF.toInt())
         endJoyPinch()
         if (on) {
             Toast.makeText(this, R.string.hint_zoom_mode, Toast.LENGTH_LONG).show()
@@ -163,6 +227,8 @@ class MainActivity : AppCompatActivity(), StreamClient.Listener, SurfaceHolder.C
         client?.close()
         client = StreamClient(ip, this).also { it.start() }
         connectButton.setText(R.string.btn_disconnect)
+        setDot(0xFFFFC107.toInt())
+        showSettings(false)
         setStatus(getString(R.string.status_connecting, ip))
     }
 
@@ -179,6 +245,7 @@ class MainActivity : AppCompatActivity(), StreamClient.Listener, SurfaceHolder.C
         }
         connectButton.setText(R.string.btn_connect)
         hintText.visibility = View.GONE
+        setDot(0xFF9E9E9E.toInt())
         setStatus(getString(R.string.status_idle))
     }
 
@@ -356,6 +423,12 @@ class MainActivity : AppCompatActivity(), StreamClient.Listener, SurfaceHolder.C
                 ev.actionMasked == MotionEvent.ACTION_HOVER_MOVE -> rememberPointer(ev)
             }
         }
+        if (ev.actionMasked == MotionEvent.ACTION_HOVER_MOVE || ev.actionMasked == MotionEvent.ACTION_HOVER_ENTER) {
+            // A panel jobb széléhez közel: előjön az ikonoszlop.
+            val root = window.decorView
+            val edge = 56 * resources.displayMetrics.density
+            if (ev.x > root.width - edge) wakeSideBar(keep = true) else if (sideBar.alpha > idleAlpha) scheduleSideBarFade()
+        }
         return super.dispatchGenericMotionEvent(ev)
     }
 
@@ -384,6 +457,7 @@ class MainActivity : AppCompatActivity(), StreamClient.Listener, SurfaceHolder.C
     // ---- StreamClient.Listener (hálózati szálon) ----
 
     override fun onConnected() {
+        setDot(0xFF4CAF50.toInt())
         setStatus(getString(R.string.status_connected))
     }
 
@@ -394,6 +468,7 @@ class MainActivity : AppCompatActivity(), StreamClient.Listener, SurfaceHolder.C
         }
         releaseAudio()
         runOnUiThread { hintText.visibility = View.GONE }
+        setDot(0xFFFFC107.toInt())
         setStatus(getString(R.string.status_disconnected, reason))
     }
 
