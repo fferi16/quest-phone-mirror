@@ -89,15 +89,29 @@ Az APK-k ide kerülnek: `phone/build/outputs/apk/debug/phone-debug.apk` és
 | Fekete a kép egy appban | Az app védett (FLAG_SECURE vagy DRM), pl. Netflix, banki app. Ezt az Android tiltja, nem kerülhető meg. |
 | Szaggat | Kapcsolj 5 GHz-es wifire; a `ScreenEncoder.BITRATE` és `MAX_LONG_EDGE` értéke csökkenthető. |
 
+## Hang
+
+- A telefonon lejátszott hang (média, játék) átmegy a Questre, kb. 100–200 ms késéssel.
+- A telefonos app „Telefon némítása” pipája csatlakozáskor nullára veszi a médiahangerőt, bontáskor visszaállítja.
+- **Hívások hangja nem megy át** (telefonhívás, Messenger, WhatsApp): az Android a hívás típusú hangot
+  kizárja a rögzítésből, és a Quest mikrofonja sem adható át a telefon appjainak. Hívásokhoz a Quest
+  böngészőjében a messenger.com / web.whatsapp.com használható, a headset mikrofonjával és hangszórójával.
+
+## Görgetés
+
+- Húzás a panelen (ravasz + mozgatás) és a hüvelykujj-kar is görget. A kar görgetését a telefon
+  folyamatos húzásként játssza le, a lépésköz a `TouchInjectorService.handleScroll` függvényben állítható.
+
 ## Ismert korlátok
 
 - Egy ujjas érintés, húzás, görgetés működik. Kétujjas csippentés nincs.
 - Védett tartalom (DRM, FLAG_SECURE) feketén jelenik meg.
+- Kézzel lezárt telefonnál a rendszer leállítja a rögzítést; feloldás után az értesítésre koppintva
+  indul újra. Csatlakozott Quest mellett a telefon magától nem zárolódik, csak elsötétül.
 - A panel álló tájolású; ha a telefon fekvőbe fordul, a kép a panelen belül fekvőben, kisebben látszik.
 - Immerzív VR-appok futása alatt a panel nem látható, csak a Home környezetben és passthrough alatt.
 
 ## Továbbfejlesztési ötletek
 
 - Kétujjas gesztusok (második mutató a protokollban + második stroke).
-- Hangátvitel (AudioPlaybackCapture, Android 10+).
 - Unity/OpenXR alapú kliens, hogy VR-appok közben is látszódjon.
