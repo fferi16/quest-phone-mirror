@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Telefon körvonal -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M40,26 h28 a4,4 0 0 1 4,4 v48 a4,4 0 0 1 -4,4 h-28 a4,4 0 0 1 -4,-4 v-48 a4,4 0 0 1 4,-4 z M42,32 v42 h24 v-42 z" />
+    <!-- Wifi hullámok -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M80,44 a14,14 0 0 1 0,20 l-3,-3 a10,10 0 0 0 0,-14 z M86,38 a22,22 0 0 1 0,32 l-3,-3 a18,18 0 0 0 0,-26 z" />
+</vector>
