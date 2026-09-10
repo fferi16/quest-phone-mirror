@@ -342,8 +342,14 @@ class MirrorService : Service() {
      * Amíg a Quest csatlakozva van és fut a rögzítés, a telefon képernyője ne zárolódjon,
      * különben a rendszer leállítja a rögzítést. Elsötétített módban tartja a kijelzőt.
      */
+    /** Bármely szálról hívható: újraértékeli az ébren tartást. */
+    fun refreshKeepAwake() {
+        mainHandler.post { updateWakeLock() }
+    }
+
     private fun updateWakeLock() {
         val needed = isCapturing && clientAddress != null
+        TouchInjectorService.instance?.setKeepScreenOn(needed)
         val current = wakeLock
         if (needed && current == null) {
             val pm = getSystemService(PowerManager::class.java)

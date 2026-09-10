@@ -52,17 +52,58 @@ class TouchInjectorService : AccessibilityService() {
         super.onServiceConnected()
         instance = this
         Log.i(TAG, "Érintésvezérlés bekapcsolva")
-        MirrorService.instance?.pushStatus()
+        MirrorService.instance?.let {
+            it.pushStatus()
+            it.refreshKeepAwake()
+        }
     }
 
     override fun onDestroy() {
         instance = null
+        setKeepScreenOn(false)
         MirrorService.instance?.pushStatus()
         super.onDestroy()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
     override fun onInterrupt() {}
+
+    // ---- Képernyő ébren tartása ----
+    //
+    // Egy láthatatlan, 1x1 képpontos kisegítő-overlay ablak FLAG_KEEP_SCREEN_ON jelzővel.
+    // Ezt a rendszer minden esetben tiszteletben tartja, szemben az elavult wake lockkal.
+
+    private var keepOnView: android.view.View? = null
+
+    fun setKeepScreenOn(on: Boolean) {
+        handler.post {
+            val wm = getSystemService(android.view.WindowManager::class.java) ?: return@post
+            try {
+                if (on && keepOnView == null) {
+                    val v = android.view.View(this)
+                    val lp = android.view.WindowManager.LayoutParams(
+                        1, 1,
+                        android.view.WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                        android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                            android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                            android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                            android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                        android.graphics.PixelFormat.TRANSLUCENT
+                    )
+                    lp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+                    wm.addView(v, lp)
+                    keepOnView = v
+                    Log.i(TAG, "Képernyő ébren tartása (overlay) bekapcsolva")
+                } else if (!on && keepOnView != null) {
+                    wm.removeView(keepOnView)
+                    keepOnView = null
+                    Log.i(TAG, "Képernyő ébren tartása (overlay) kikapcsolva")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Ébren tartó overlay hiba: ${e.message}")
+            }
+        }
+    }
 
     // ---- Publikus API (bármely szálról hívható) ----
 
