@@ -34,10 +34,18 @@ VR/
 1. Nyisd meg Android Studióban a `VR` mappát (*File → Open*).
 2. Első megnyitáskor a Studio letölti a Gradle-t és az SDK-t (compileSdk 34). Ha felajánlja az SDK
    hiányzó részeinek telepítését, fogadd el.
-3. Ha a Gradle sync a hiányzó `gradle-wrapper.jar` miatt panaszkodik: *File → Settings → Build, Execution,
-   Deployment → Build Tools → Gradle*, ott a *Distribution* legyen „Wrapper” – a Studio letölti magától.
-   Vagy egy terminálban, ha van telepített Gradle: `gradle wrapper`.
-4. Két futtatási konfiguráció lesz: `phone` és `quest`.
+3. Két futtatási konfiguráció lesz: `phone` és `quest`.
+
+**Parancssorból** (Android Studio nélkül is megy, csak JDK 17 és az Android SDK kell):
+
+```bash
+set JAVA_HOME=%LOCALAPPDATA%\Programs\jdk-17
+gradlew.bat assembleDebug
+```
+
+Az APK-k ide kerülnek: `phone/build/outputs/apk/debug/phone-debug.apk` és
+`quest/build/outputs/apk/debug/quest-debug.apk`. A `local.properties` fájlban az `sdk.dir` mutat az SDK-ra
+(alapból `%LOCALAPPDATA%\Android\Sdk`).
 
 ## Telepítés a telefonra
 
