@@ -313,28 +313,35 @@ class TouchInjectorService : AccessibilityService() {
         val moveX = -dx * step
         val moveY = dy * step
 
+        if (scrollRepressPending) {
+            // Épp emeljük az ujjat, a mozgást gyűjtjük, és az újranyomás után visszük át.
+            scrollCarryX += moveX
+            scrollCarryY += moveY
+            handler.removeCallbacks(scrollEnd)
+            handler.postDelayed(scrollEnd, 150)
+            return
+        }
+
         if (!scrollActive) {
             val p = screenPoint(nx, ny)
-            // A kiindulópont a képernyő közepe táján legyen, hogy legyen hely mindkét irányba.
-            scrollOrigin = PointF(
-                p.x.coerceIn(size.x * 0.15f, size.x * 0.85f),
-                p.y.coerceIn(size.y * 0.3f, size.y * 0.7f)
-            )
+            scrollOrigin = scrollStartPoint(p, moveX, moveY, size)
             scrollPos = PointF(scrollOrigin.x, scrollOrigin.y)
             scrollActive = true
             handleTouchPx(Protocol.TOUCH_DOWN, scrollPos)
         }
 
-        var nextX = scrollPos.x + moveX
-        var nextY = scrollPos.y + moveY
+        val nextX = scrollPos.x + moveX
+        val nextY = scrollPos.y + moveY
         val margin = size.y * 0.05f
         if (nextY < margin || nextY > size.y - margin || nextX < margin || nextX > size.x - margin) {
-            // Elértük a szélét: felemeljük az ujjat, és a kiindulópontból folytatjuk.
-            handleTouchPx(Protocol.TOUCH_UP, scrollPos)
-            scrollPos = PointF(scrollOrigin.x, scrollOrigin.y)
-            handleTouchPx(Protocol.TOUCH_DOWN, scrollPos)
-            nextX = (scrollPos.x + moveX).coerceIn(margin, size.x - margin)
-            nextY = (scrollPos.y + moveY).coerceIn(margin, size.y - margin)
+            // Elértük a szélét: az ujjat finoman felemeljük, és az újranyomás a másik szélről indul.
+            scrollCarryX = moveX
+            scrollCarryY = moveY
+            scrollRepressPending = true
+            handleTouchPx(Protocol.TOUCH_UP, scrollPos, gentle = true)
+            handler.removeCallbacks(scrollEnd)
+            handler.postDelayed(scrollEnd, 150)
+            return
         }
         scrollPos = PointF(nextX, nextY)
         handleTouchPx(Protocol.TOUCH_MOVE, scrollPos)
@@ -343,10 +350,53 @@ class TouchInjectorService : AccessibilityService() {
         handler.postDelayed(scrollEnd, 150)
     }
 
+    private var scrollRepressPending = false
+    private var scrollCarryX = 0f
+    private var scrollCarryY = 0f
+
+    /** Az ujj a görgetés irányával ellentétes szélről indul, hogy sokáig legyen helye. */
+    private fun scrollStartPoint(p: PointF, moveX: Float, moveY: Float, size: PointF): PointF {
+        val x = when {
+            moveX < 0f -> size.x * 0.85f
+            moveX > 0f -> size.x * 0.15f
+            else -> p.x.coerceIn(size.x * 0.15f, size.x * 0.85f)
+        }
+        val y = when {
+            moveY < 0f -> size.y * 0.85f
+            moveY > 0f -> size.y * 0.15f
+            else -> p.y.coerceIn(size.y * 0.3f, size.y * 0.7f)
+        }
+        return PointF(x, y)
+    }
+
+    /** A finom felemelés után (ha még görgetünk) újranyomás a másik szélről. */
+    private fun afterGentleLift() {
+        if (!scrollRepressPending) return
+        scrollRepressPending = false
+        if (!scrollActive) return
+        val size = screenSize()
+        scrollOrigin = scrollStartPoint(scrollPos, scrollCarryX, scrollCarryY, size)
+        scrollPos = PointF(scrollOrigin.x, scrollOrigin.y)
+        handleTouchPx(Protocol.TOUCH_DOWN, scrollPos)
+        val margin = size.y * 0.05f
+        scrollPos = PointF(
+            (scrollPos.x + scrollCarryX).coerceIn(margin, size.x - margin),
+            (scrollPos.y + scrollCarryY).coerceIn(margin, size.y - margin)
+        )
+        scrollCarryX = 0f
+        scrollCarryY = 0f
+        handleTouchPx(Protocol.TOUCH_MOVE, scrollPos)
+    }
+
     private fun endScroll() {
         if (!scrollActive) return
         scrollActive = false
-        handleTouchPx(Protocol.TOUCH_UP, scrollPos)
+        if (scrollRepressPending) {
+            // A felemelés már folyamatban, nem nyomunk újra.
+            scrollRepressPending = false
+            return
+        }
+        handleTouchPx(Protocol.TOUCH_UP, scrollPos, gentle = true)
     }
 
     // ---- Érintés / húzás ----
@@ -355,6 +405,7 @@ class TouchInjectorService : AccessibilityService() {
         if (scrollActive && action == Protocol.TOUCH_DOWN) {
             handler.removeCallbacks(scrollEnd)
             scrollActive = false
+            scrollRepressPending = false
         }
         if (action == Protocol.TOUCH_DOWN && pinchA != null) {
             // Csippentés közben érkező új érintés: a csippentést eldobjuk.
@@ -373,7 +424,11 @@ class TouchInjectorService : AccessibilityService() {
     private var downPoint = PointF()
     private var withinSlop = false
 
-    private fun handleTouchPx(action: Int, rawPoint: PointF) {
+    /** Belső "művelet": rövid megállás, majd felengedés (dobás nélkül). */
+    private val ACTION_HOLD_THEN_UP = 100
+    private val HOLD_MS = 80L
+
+    private fun handleTouchPx(action: Int, rawPoint: PointF, gentle: Boolean = false) {
         var p = rawPoint
         when (action) {
             Protocol.TOUCH_DOWN -> {
@@ -423,22 +478,34 @@ class TouchInjectorService : AccessibilityService() {
             Protocol.TOUCH_UP, Protocol.TOUCH_CANCEL -> {
                 if (stroke == null) return
                 if (busy) {
-                    pendingAction = Protocol.TOUCH_UP
+                    pendingAction = if (gentle) ACTION_HOLD_THEN_UP else Protocol.TOUCH_UP
                     pendingX = p.x
                     pendingY = p.y
                     return
                 }
-                continueTo(p, willContinue = false)
+                if (gentle) {
+                    holdThenUp(p)
+                } else {
+                    continueTo(p, willContinue = false)
+                }
             }
         }
     }
 
+    /** Megállás a helyén HOLD_MS ideig, utána felengedés – így nincs "dobás". */
+    private fun holdThenUp(p: PointF) {
+        continueTo(p, willContinue = true, durationOverride = HOLD_MS)
+        pendingAction = Protocol.TOUCH_UP
+        pendingX = p.x
+        pendingY = p.y
+    }
+
     private var moveCount = 0
 
-    private fun continueTo(p: PointF, willContinue: Boolean) {
+    private fun continueTo(p: PointF, willContinue: Boolean, durationOverride: Long = 0L) {
         val current = stroke ?: return
         val now = SystemClock.uptimeMillis()
-        val duration = (now - lastTime).coerceIn(1L, MAX_SEGMENT_MS)
+        val duration = if (durationOverride > 0L) durationOverride else (now - lastTime).coerceIn(1L, MAX_SEGMENT_MS)
         if (willContinue) moveCount++ else {
             Log.d(TAG, "Húzás vége: $moveCount mozgás-szakasz, utolsó szakasz ${duration}ms")
             moveCount = 0
@@ -502,11 +569,17 @@ class TouchInjectorService : AccessibilityService() {
     private fun flushPending() {
         val action = pendingAction
         pendingAction = -1
-        if (stroke == null || action < 0) return
+        if (stroke == null) {
+            // Az ujj felengedve: ha a görgetés újranyomásra vár, most jöhet.
+            afterGentleLift()
+            return
+        }
+        if (action < 0) return
         val p = PointF(pendingX, pendingY)
         when (action) {
             Protocol.TOUCH_MOVE -> continueTo(p, willContinue = true)
             Protocol.TOUCH_UP -> continueTo(p, willContinue = false)
+            ACTION_HOLD_THEN_UP -> holdThenUp(p)
         }
     }
 }
