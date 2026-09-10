@@ -522,7 +522,19 @@ class MainActivity : AppCompatActivity(), StreamClient.Listener, SurfaceHolder.C
             waitingForKeyframe = true
             recreateDecoderLocked()
         }
-        runOnUiThread { videoContainer.setAspectRatio(width.toFloat() / height.toFloat()) }
+        runOnUiThread {
+            videoContainer.setAspectRatio(width.toFloat() / height.toFloat())
+            // A panel tájolása kövesse a telefonét: fekvő kép -> fekvő panel.
+            val wanted = if (width > height) {
+                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            } else {
+                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            }
+            if (requestedOrientation != wanted) {
+                Log.i(TAG, "Panel tájolás váltás: ${if (width > height) "fekvő" else "álló"}")
+                requestedOrientation = wanted
+            }
+        }
     }
 
     override fun onCodecConfig(data: ByteArray) {
