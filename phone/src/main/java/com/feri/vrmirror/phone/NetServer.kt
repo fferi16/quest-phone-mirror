@@ -215,19 +215,31 @@ class NetServer(private val listener: Listener) {
         send { it.write(Protocol.MSG_CODEC_CONFIG, data) }
     }
 
+    private var lastKeyframeRequest = 0L
+
+    /** Kulcskocka kérése legfeljebb fél másodpercenként (különben a kódoló csupa kulcskockát adna). */
+    private fun requestKeyframeThrottled() {
+        val now = System.currentTimeMillis()
+        if (now - lastKeyframeRequest < 500) return
+        lastKeyframeRequest = now
+        listener.onKeyframeRequested()
+    }
+
     fun sendFrame(data: ByteArray, keyframe: Boolean, ptsUs: Long) {
         synchronized(lock) {
             val w = writer ?: return
+            if (queuedFrames.get() >= MAX_QUEUED_FRAMES) {
+                // A hálózat lemaradt: MINDEN kockát eldobunk (a kulcskockát is), amíg a sor ki nem ürül,
+                // utána a következő kulcskockától folytatjuk. Így a memória nem telik meg.
+                if (!dropUntilKeyframe) Log.w(TAG, "Küldési sor tele, képkockák eldobása a következő kulcskockáig")
+                dropUntilKeyframe = true
+                requestKeyframeThrottled()
+                return
+            }
             if (keyframe) {
                 dropUntilKeyframe = false
             } else if (dropUntilKeyframe) {
-                return
-            }
-            if (!keyframe && queuedFrames.get() >= MAX_QUEUED_FRAMES) {
-                // A hálózat lemaradt: eldobjuk a kockákat a következő kulcskockáig, és kérünk egyet.
-                Log.w(TAG, "Küldési sor tele, képkockák eldobása a következő kulcskockáig")
-                dropUntilKeyframe = true
-                listener.onKeyframeRequested()
+                requestKeyframeThrottled()
                 return
             }
             val header = ByteBuffer.allocate(12)

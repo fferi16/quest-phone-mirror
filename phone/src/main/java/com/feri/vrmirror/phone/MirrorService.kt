@@ -428,7 +428,13 @@ class MirrorService : Service() {
             TouchInjectorService.instance?.pressKey(key)
         }
 
+        private var lastKeyframeAt = 0L
+
         override fun onKeyframeRequested() {
+            // A Quest is kérhet kulcskockát; itt is fékezzük, hogy ne legyen kulcskocka-áradat.
+            val now = System.currentTimeMillis()
+            if (now - lastKeyframeAt < 300) return
+            lastKeyframeAt = now
             encoder?.requestKeyframe()
         }
     }
